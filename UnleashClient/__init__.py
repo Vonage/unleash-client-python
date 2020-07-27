@@ -5,7 +5,7 @@ from UnleashClient.api import register_client
 from UnleashClient.periodic_tasks import fetch_and_load_features, aggregate_and_send_metrics
 from UnleashClient.strategies import ApplicationHostname, Default, GradualRolloutRandom, \
     GradualRolloutSessionId, GradualRolloutUserId, UserWithId, RemoteAddress, FlexibleRollout
-from UnleashClient.constants import METRIC_LAST_SENT_TIME, DISABLED_VARIATION
+from UnleashClient.constants import METRIC_LAST_SENT_TIME, DISABLED_VARIATION, FEATURES_URL
 from .utils import LOGGER
 from .deprecation_warnings import strategy_v2xx_deprecation_check
 
@@ -86,7 +86,7 @@ class UnleashClient:
         # Client status
         self.is_initialized = False
 
-    def initialize_client(self) -> None:
+    def initialize_client(self, disable_registration=False) -> None:
         """
         Initializes client and starts communication with central unleash server(s).
 
@@ -109,7 +109,7 @@ class UnleashClient:
             "strategy_mapping": self.strategy_mapping
         }
         # Register app
-        if not self.unleash_disable_registration:
+        if not self.unleash_disable_registration and not disable_registration:
             register_client(self.unleash_url, self.unleash_app_name, self.unleash_instance_id,
                             self.unleash_metrics_interval, self.unleash_custom_headers,
                             self.unleash_custom_options, self.strategy_mapping)
