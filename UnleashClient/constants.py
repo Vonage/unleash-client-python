@@ -1,7 +1,7 @@
 # Library
 SDK_NAME = "unleash-client-python"
 SDK_VERSION = "3.4.2"
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 5
 METRIC_LAST_SENT_TIME = "mlst"
 
 # =Unleash=

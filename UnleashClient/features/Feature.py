@@ -74,7 +74,7 @@ class Feature:
 
         self.increment_stats(flag_value)
 
-        LOGGER.info("Feature toggle status for feature %s: %s", self.name, flag_value)
+        LOGGER.info(f"Feature toggle status for feature {self.name} with context {context} : {flag_value}")
 
         return flag_value
 

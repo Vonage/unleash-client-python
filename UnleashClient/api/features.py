@@ -42,6 +42,6 @@ def get_feature_toggles(url: str,
 
         return resp.json()
     except Exception:
-        LOGGER.exception("Unleash Client feature fetch failed due to exception: %s", Exception)
+        LOGGER.exception("Unleash Client feature fetch failed")
 
     return {}

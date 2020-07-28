@@ -1,21 +1,17 @@
 from datetime import datetime, timezone
-from typing import Dict, Callable, Any
-import copy
+from typing import Dict, Callable
 from fcache.cache import FileCache
-from apscheduler.job import Job
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from UnleashClient.api import register_client
 from UnleashClient.periodic_tasks import fetch_and_load_features, aggregate_and_send_metrics
 from UnleashClient.strategies import ApplicationHostname, Default, GradualRolloutRandom, \
     GradualRolloutSessionId, GradualRolloutUserId, UserWithId, RemoteAddress, FlexibleRollout
-from UnleashClient.constants import METRIC_LAST_SENT_TIME, DISABLED_VARIATION
+from UnleashClient.constants import METRIC_LAST_SENT_TIME, DISABLED_VARIATION, FEATURES_URL
 from .utils import LOGGER
 from .deprecation_warnings import strategy_v2xx_deprecation_check
 
 
 # pylint: disable=dangerous-default-value
-class UnleashClient():
+class UnleashClient:
     """
     Client implementation.
 
@@ -67,9 +63,6 @@ class UnleashClient():
         # Class objects
         self.cache = FileCache(self.unleash_instance_id, app_cache_dir=cache_directory)
         self.features = {}  # type: Dict
-        self.scheduler = BackgroundScheduler()
-        self.fl_job = None  # type: Job
-        self.metric_job = None  # type: Job
         self.cache[METRIC_LAST_SENT_TIME] = datetime.now(timezone.utc)
         self.cache.sync()
 
@@ -93,7 +86,7 @@ class UnleashClient():
         # Client status
         self.is_initialized = False
 
-    def initialize_client(self) -> None:
+    def initialize_client(self, disable_registration=False) -> None:
         """
         Initializes client and starts communication with central unleash server(s).
 
@@ -115,7 +108,17 @@ class UnleashClient():
             "features": self.features,
             "strategy_mapping": self.strategy_mapping
         }
+        # Register app
+        if not self.unleash_disable_registration and not disable_registration:
+            register_client(self.unleash_url, self.unleash_app_name, self.unleash_instance_id,
+                            self.unleash_metrics_interval, self.unleash_custom_headers,
+                            self.unleash_custom_options, self.strategy_mapping)
 
+        fetch_and_load_features(**fl_args)
+
+        self.is_initialized = True
+
+    def close(self):
         metrics_args = {
             "url": self.unleash_url,
             "app_name": self.unleash_app_name,
@@ -125,27 +128,7 @@ class UnleashClient():
             "features": self.features,
             "ondisk_cache": self.cache
         }
-
-        # Register app
-        if not self.unleash_disable_registration:
-            register_client(self.unleash_url, self.unleash_app_name, self.unleash_instance_id,
-                            self.unleash_metrics_interval, self.unleash_custom_headers,
-                            self.unleash_custom_options, self.strategy_mapping)
-
-        fetch_and_load_features(**fl_args)
-
-        # Start periodic jobs
-        self.scheduler.start()
-        self.fl_job = self.scheduler.add_job(fetch_and_load_features,
-                                             trigger=IntervalTrigger(seconds=int(self.unleash_refresh_interval)),
-                                             kwargs=fl_args)
-
-        if not self.unleash_disable_metrics:
-            self.metric_job = self.scheduler.add_job(aggregate_and_send_metrics,
-                                                     trigger=IntervalTrigger(seconds=int(self.unleash_metrics_interval)),
-                                                     kwargs=metrics_args)
-
-        self.is_initialized = True
+        aggregate_and_send_metrics(**metrics_args)
 
     def destroy(self):
         """
@@ -155,10 +138,6 @@ class UnleashClient():
 
         :return:
         """
-        self.fl_job.remove()
-        if self.metric_job:
-            self.metric_job.remove()
-        self.scheduler.shutdown()
         self.cache.delete()
 
     @staticmethod
@@ -173,7 +152,7 @@ class UnleashClient():
     # pylint: disable=broad-except
     def is_enabled(self,
                    feature_name: str,
-                   context: dict = {},
+                   context: dict = None,
                    default_value: bool = False,
                    fallback_function: Callable = None) -> bool:
         """
@@ -188,6 +167,8 @@ class UnleashClient():
         :param fallback_function: Allows users to provide a custom function to set default value.
         :return: True/False
         """
+        if context is None:
+            context = {}
         context.update(self.unleash_static_context)
 
         if self.is_initialized:
@@ -206,7 +187,7 @@ class UnleashClient():
     # pylint: disable=broad-except
     def get_variant(self,
                     feature_name: str,
-                    context: dict = {}) -> dict:
+                    context: dict = None) -> dict:
         """
         Checks if a feature toggle is enabled.  If so, return variant.
 
@@ -217,6 +198,8 @@ class UnleashClient():
         :param context: Dictionary with context (e.g. IPs, email) for feature toggle.
         :return: Dict with variant and feature flag status.
         """
+        if context is None:
+            context = {}
         context.update(self.unleash_static_context)
 
         if self.is_initialized:

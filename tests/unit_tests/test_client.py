@@ -112,14 +112,8 @@ def test_uc_lifecycle(unleash_client):
 
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
-    time.sleep(1)
     assert unleash_client.is_initialized
     assert len(unleash_client.features) >= 4
-
-    # Simulate server provisioning change
-    responses.add(responses.GET, URL + FEATURES_URL, json=MOCK_ALL_FEATURES, status=200)
-    time.sleep(30)
-    assert len(unleash_client.features) >= 9
 
 
 @responses.activate
@@ -131,7 +125,6 @@ def test_uc_is_enabled(unleash_client):
 
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
-    time.sleep(1)
     assert unleash_client.is_enabled("testFlag")
 
 
@@ -154,7 +147,6 @@ def test_uc_fallbackfunction(unleash_client, mocker):
 
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
-    time.sleep(1)
     # Non-existent feature flag, fallback_function
     assert unleash_client.is_enabled("notFoundTestFlag", fallback_function=fallback_spy)
     assert fallback_spy.call_count == 1
@@ -167,26 +159,6 @@ def test_uc_fallbackfunction(unleash_client, mocker):
     # Existent feature flag, fallback_function
     assert unleash_client.is_enabled("testFlag", fallback_function=good_fallback)
     assert fallback_spy.call_count == 0
-
-
-@responses.activate
-def test_uc_dirty_cache(unleash_client_nodestroy):
-    unleash_client = unleash_client_nodestroy
-    # Set up API
-    responses.add(responses.POST, URL + REGISTER_URL, json={}, status=202)
-    responses.add(responses.GET, URL + FEATURES_URL, json=MOCK_FEATURE_RESPONSE, status=200)
-    responses.add(responses.POST, URL + METRICS_URL, json={}, status=202)
-
-    # Create Unleash client and check initial load
-    unleash_client.initialize_client()
-    time.sleep(5)
-    assert unleash_client.is_enabled("testFlag")
-    unleash_client.scheduler.shutdown()
-
-    # Check that everything works if previous cache exists.
-    unleash_client.initialize_client()
-    time.sleep(5)
-    assert unleash_client.is_enabled("testFlag")
 
 
 @responses.activate
@@ -204,7 +176,6 @@ def test_uc_is_enabled_with_context():
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
 
-    time.sleep(1)
     assert unleash_client.is_enabled("testContextFlag")
     unleash_client.destroy()
 
@@ -218,7 +189,6 @@ def test_uc_is_enabled_error_states(unleash_client):
 
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
-    time.sleep(1)
     assert not unleash_client.is_enabled("ThisFlagDoesn'tExist")
     assert unleash_client.is_enabled("ThisFlagDoesn'tExist", default_value=True)
 
@@ -241,7 +211,6 @@ def test_uc_get_variant():
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
 
-    time.sleep(1)
     # If feature flag is on.
     variant = unleash_client.get_variant("testVariations", context={'userId': '2'})
     assert variant['name'] == 'VarA'
@@ -272,10 +241,9 @@ def test_uc_metrics(unleash_client):
 
     # Create Unleash client and check initial load
     unleash_client.initialize_client()
-    time.sleep(1)
     assert unleash_client.is_enabled("testFlag")
 
-    time.sleep(12)
+    unleash_client.close()
     request = json.loads(responses.calls[-1].request.body)
     assert request['bucket']["toggles"]["testFlag"]["yes"] == 1
 
@@ -290,46 +258,8 @@ def test_uc_disabled_registration(unleash_client_toggle_only):
 
     unleash_client.initialize_client()
     unleash_client.is_enabled("testFlag")
-    time.sleep(20)
     assert unleash_client.is_enabled("testFlag")
 
     for api_call in responses.calls:
         assert '/api/client/features' in api_call.request.url
 
-
-@responses.activate
-def test_uc_server_error(unleash_client):
-    # Verify that Unleash Client will still fall back gracefully if SERVER ANGRY RAWR, and then recover gracefully.
-
-    unleash_client = unleash_client
-    # Set up APIs
-    responses.add(responses.POST, URL + REGISTER_URL, json={}, status=401)
-    responses.add(responses.GET, URL + FEATURES_URL, status=500)
-    responses.add(responses.POST, URL + METRICS_URL, json={}, status=401)
-
-    unleash_client.initialize_client()
-    assert not unleash_client.is_enabled("testFlag")
-
-    responses.remove(responses.GET, URL + FEATURES_URL)
-    responses.add(responses.GET, URL + FEATURES_URL, json=MOCK_FEATURE_RESPONSE, status=200)
-    time.sleep(20)
-    assert unleash_client.is_enabled("testFlag")
-
-
-@responses.activate
-def test_uc_server_error_recovery(unleash_client):
-    # Verify that Unleash Client will still fall back gracefully if SERVER ANGRY RAWR, and then recover gracefully.
-
-    unleash_client = unleash_client
-    # Set up APIs
-    responses.add(responses.POST, URL + REGISTER_URL, json={}, status=401)
-    responses.add(responses.GET, URL + FEATURES_URL, status=500)
-    responses.add(responses.POST, URL + METRICS_URL, json={}, status=401)
-
-    unleash_client.initialize_client()
-    assert not unleash_client.is_enabled("testFlag")
-
-    responses.remove(responses.GET, URL + FEATURES_URL)
-    responses.add(responses.GET, URL + FEATURES_URL, json=MOCK_FEATURE_RESPONSE, status=200)
-    time.sleep(20)
-    assert unleash_client.is_enabled("testFlag")

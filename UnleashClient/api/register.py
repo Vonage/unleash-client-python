@@ -56,6 +56,6 @@ def register_client(url: str,
 
         return True
     except Exception:
-        LOGGER.exception("Unleash Client registration failed due to exception: %s", Exception)
+        LOGGER.exception("Unleash Client registration failed")
 
     return False
