@@ -18,7 +18,7 @@ setup(
     long_description_content_type="text/markdown",
     url='https://github.com/Unleash/unleash-client-python',
     packages=find_packages(),
-    install_requires=["requests==2.23.0",
+    install_requires=["requests==2.32.2",
                       "fcache==0.4.7",
                       "mmh3-binary==2.5.1"],
     tests_require=['pytest', "mimesis", "responses", 'pytest-mock'],
